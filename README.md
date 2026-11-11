@@ -59,11 +59,11 @@ python -m pip install --upgrade pip
 ```
 
 ```powershell
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 ```powershell
-pip install -e .
+python -m pip install -e .
 ```
 
 If activation is blocked by the execution policy, run this first in the same
