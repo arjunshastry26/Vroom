@@ -1,0 +1,55 @@
+# Module B - motion analysis and temporal chunking.
+
+motion:
+  drop_duplicates: true    # duplicate frames are excluded from analysis and chunks
+  mask_path: null          # optional image; non-zero pixels are analysed (e.g. to exclude the car body)
+  num_threads: 0
+  seed: 0                  # OpenCV RNG seed (RANSAC)
+  dense_flow:              # Farneback
+    scale: 0.5             # computed on a downscaled copy; magnitudes reported at full size
+    pyr_scale: 0.5
+    levels: 4
+    winsize: 21
+    iterations: 3
+    poly_n: 7
+    poly_sigma: 1.5
+  tracking:                # Shi-Tomasi + Lucas-Kanade, forward-backward check
+    max_corners: 400
+    quality_level: 0.01
+    min_distance: 7
+    win_size: 21
+    pyramid_levels: 3
+    fb_threshold_px: 1.5
+  pose:                    # ORB + essential matrix
+    orb_features: 1500
+    ratio_test: 0.75
+    assumed_hfov_deg: 80.0 # ASSUMPTION: broadcast onboard intrinsics are unknown
+    ransac_threshold_px: 1.0
+    ransac_confidence: 0.999
+    min_matches: 20
+    min_inliers: 15
+
+chunking:
+  # Chunk lengths in extracted frames, including the overlap. At sample_fps = 3,
+  # 30 frames = 10 s. max_frames is the GPU-memory limit of the cloud worker.
+  min_frames: 15
+  max_frames: 45
+  target_frames: 30
+  overlap_frames: 5        # frames shared with the next chunk
+  fixed_chunk_frames: null # fixed baseline length; null = target_frames
+  length_penalty: 0.5      # adaptive: weight of ((length - target) / target)^2 per chunk
+  min_cost_window: 3       # adaptive: a cut is scored over max(overlap_frames, this) frame pairs
+  min_segment_frames: 2    # segments (between cuts/gaps) shorter than this are dropped
+  drop_duplicates: true    # must match motion.drop_duplicates
+  score:
+    # BoundaryScore = sum(w_k * component_k) / sum(w_k); each component in [0, 1].
+    weights:
+      motion_change: 1.0
+      flow_variance: 0.5
+      rotation_change: 1.0
+      tracking_instability: 1.0
+      blur_penalty: 0.5
+      reconstruction_uncertainty: 1.0   # only used once reconstruction feedback exists
+    low_percentile: 5.0    # robust normalisation range (per clip)
+    high_percentile: 95.0
+    invalid_pose_value: 1.0  # rotation component when the pose could not be estimated

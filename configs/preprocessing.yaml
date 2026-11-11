@@ -1,0 +1,37 @@
+# Module A - video preprocessing. Every value here is copied into
+# data/frames/<video_id>/metadata.json when frames are extracted.
+
+target_width: 512          # output resolution (VROOM also worked at reduced resolution)
+target_height: 288
+resize_mode: stretch       # stretch | center_crop (crop to the target aspect ratio first)
+interpolation: area        # area | linear | cubic | lanczos
+sample_fps: 3.0            # frames kept per second (2-4 recommended to start); null = every frame
+image_format: jpg          # jpg | png
+jpeg_quality: 95
+timestamp_source: auto     # auto (ffprobe PTS, else index/fps) | ffprobe | index
+gap_factor: 1.5            # PTS step above gap_factor * (1/fps) is recorded as missing frames
+num_threads: 0             # OpenCV threads; 0 = library default
+overwrite: false           # refuse to replace an existing extraction unless true
+
+# Time window, seconds from the first frame. A dataset manifest
+# (scripts/prepare_video.py --start/--duration) overrides this block.
+clip:
+  start_s: 0.0
+  duration_s: null
+
+# Hard-cut detection at the source frame rate (colour-histogram distance).
+scene_cut:
+  enabled: true
+  hist_threshold: 0.45     # Bhattacharyya distance in [0, 1]
+  ratio_to_recent: 4.0     # must also exceed this multiple of the recent median distance
+  history: 15              # source frames in the running median
+  min_pixel_diff: 10.0     # and this mean absolute thumbnail difference (0-255)
+
+duplicate:
+  enabled: true
+  max_mean_abs_diff: 0.6   # thumbnails closer than this (0-255) are duplicates
+
+invalid:
+  enabled: true
+  min_mean: 4.0            # darker -> black frame
+  min_std: 2.0             # flatter -> blank frame

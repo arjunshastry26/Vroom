@@ -1,0 +1,7 @@
+# Local (laptop, CPU-only) dependencies. No PyTorch / CUDA here by design:
+# MonST3R runs in the Kaggle/Colab notebook with its own environment.
+numpy>=1.24
+opencv-python>=4.8
+PyYAML>=6.0
+matplotlib>=3.7
+pytest>=7.4

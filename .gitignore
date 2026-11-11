@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+build/
+dist/
+
+# Data and results are never committed (large, and footage may be copyrighted)
+data/raw/*
+data/frames/
+data/masks/
+data/chunks/
+data/manifests/
+outputs/
+!data/raw/.gitkeep
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+*.log
