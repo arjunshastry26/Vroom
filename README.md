@@ -6,10 +6,8 @@ reconstruction of Formula 1 circuits.**
 A research pipeline, inspired by [VROOM](https://varun-bharadwaj.github.io/vroom/)
 ([paper](https://arxiv.org/abs/2508.17172)), that reconstructs the Interlagos
 circuit and the camera trajectory from onboard footage using
-[MonST3R](https://github.com/Junyi42/monst3r). No frontend: computer vision,
-optimization and evaluation only.
-
-Hypothesis under test (not yet tested, no claim is made):
+[MonST3R](https://github.com/Junyi42/monst3r).
+Hypothesis under test :
 
 > Motion-aware adaptive chunking combined with global pose-graph optimization
 > improves trajectory consistency and reduces accumulated drift compared with
