@@ -1,0 +1,39 @@
+# Module D - MonST3R settings used by cloud/monst3r_worker.py. This file is
+# converted to reconstruction.json inside the upload package. The names map
+# directly onto arguments of MonST3R's own functions (see its demo.py).
+
+model:
+  # Hugging Face id (downloaded in the notebook) or a path to a local .pth file.
+  weights: Junyi42/MonST3R_PO-TA-S-W_ViTLarge_BaseDecoder_512_dpt
+
+image_size: 512            # long side; MonST3R supports 512 or 224
+seed: 0
+
+inference:
+  batch_size: 8            # image pairs per forward pass (MonST3R demo default: 16)
+  scene_graph: swinstride  # complete | swin | swinstride | swin2stride (demo default: swinstride)
+  window_size: 5           # temporal window of the scene graph (demo default: 5)
+
+alignment:                 # MonST3R global alignment (per chunk)
+  niter: 300
+  schedule: linear
+  lr: 0.01
+  shared_focal: true
+  temporal_smoothing_weight: 0.01
+  translation_weight: 1.0
+  # The MonST3R demo uses 0.01. Any value > 0 loads a RAFT flow model and SAM2,
+  # needs their checkpoints, and raises GPU memory a lot (the MonST3R README
+  # quotes 23-33 GB for 65 frames). 0 disables the flow loss and the dynamic
+  # masks, which is the setting that fits a free 16 GB GPU. This is a deviation
+  # from the MonST3R default and must be reported with any result.
+  flow_loss_weight: 0.0
+  flow_loss_start_iter: 0.1
+  flow_loss_threshold: 25
+  batchify: true           # false = MonST3R's slower, memory-saving mode (--not_batchify)
+  window_wise: false       # MonST3R's window-wise optimisation for long sequences
+  window_size: 100
+  window_overlap_ratio: 0.5
+
+output:
+  save_pointmaps: true     # about 1.8 MB per frame at 512x288; derivable from depth + intrinsics + poses
+  clean_pointcloud: true   # MonST3R demo default: lowers confidence of occluding floaters

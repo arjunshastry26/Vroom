@@ -21,14 +21,16 @@ Hypothesis under test (not yet tested, no claim is made):
 | --- | --- | --- |
 | 1 | Preprocessing: probe, frame extraction, quality checks, motion analysis, manifests | done |
 | 2 | Fixed and motion-aware adaptive chunking, plots | first version done |
-| 3 | MonST3R worker notebook for Kaggle / Colab | not started |
+| 3 | MonST3R worker, Kaggle / Colab notebooks, package export, artifact validation | written; not yet run on a GPU |
 | 4 | Cross-chunk Sim(3) alignment | not started |
 | 5 | Global pose-graph optimization, loop closure | not started |
 | 6 | Evaluation and ablations | not started |
 | 7 | Masking, multi-lap fusion, scale recovery | not started |
 
-Everything so far has been exercised only on a synthetic test clip. No real
-footage has been processed and there are no reconstruction results yet.
+Phases 1 and 2 have been run on a synthetic clip and on one real onboard
+recording. Phase 3 has been checked against the MonST3R source and with a CPU
+dry run using a random network, but never on a GPU with the real weights.
+There are no reconstruction results yet.
 
 ## What is ours and what is not
 
@@ -131,6 +133,20 @@ For real footage follow [data/README.md](data/README.md), then run the same
 last three commands with your `video_id`. Every script accepts `--help`,
 `--log-level` and `--log-file`.
 
+Build the upload package for the cloud worker, then follow
+[cloud/README.md](cloud/README.md) to reconstruct on Kaggle or Colab:
+
+```powershell
+python scripts\export_chunks.py --video-id <video_id>
+```
+
+Validate the artifacts after downloading and unzipping them into
+`outputs\reconstructions\`:
+
+```powershell
+python scripts\validate_artifacts.py --run outputs\reconstructions\<video_id>\<manifest>__recon_<hash>
+```
+
 Outputs:
 
 | Path | Content |
@@ -140,6 +156,8 @@ Outputs:
 | `data/chunks/<id>/<strategy>_<hash>/chunks.json` | chunk manifest |
 | `outputs/reports/<id>/chunking_*.json` | fixed vs adaptive summary |
 | `outputs/plots/<id>/chunking_*.png` | boundaries against motion statistics |
+| `outputs/cloud_packages/<id>_package(.zip)` | frames, manifests, settings and worker for upload |
+| `outputs/reconstructions/<id>/<manifest>__recon_<hash>/chunk_XXX/` | MonST3R artifacts per chunk |
 
 Manifest folders are named by a hash of the configuration, so a new
 configuration never overwrites an earlier result. Frame extraction refuses to
@@ -148,15 +166,18 @@ replace an existing folder unless `--overwrite` is passed.
 ## Repository layout
 
 ```
-configs/      preprocessing.yaml, chunking.yaml
+configs/      preprocessing.yaml, chunking.yaml, reconstruction.yaml
+cloud/        monst3r_worker.py, Kaggle and Colab notebooks, README.md
 data/         README.md (dataset guide); footage and derived data are git-ignored
-scripts/      prepare_video, extract_frames, make_static_mask, analyze_motion, generate_chunks, make_synthetic_clip
+scripts/      prepare_video, extract_frames, make_static_mask, analyze_motion, generate_chunks,
+              export_chunks, validate_artifacts, make_synthetic_clip
 src/vroom_interlagos/
   preprocessing/   video.py (probe, PTS), frames.py (extraction), quality.py (cuts, duplicates, invalid)
   chunking/        motion.py, scoring.py, chunkers.py, plots.py
   masking/         static_mask.py (static-region mask from temporal variation)
+  reconstruction/  package.py (upload package), artifacts.py (loading and validation)
   synthetic.py     test-clip generator
-tests/        49 tests
+tests/        57 tests (2 need PyTorch and a MonST3R checkout, otherwise skipped)
 ```
 
 Deviations from the layout in the brief, and why:
@@ -273,12 +294,16 @@ analysis on CPU. Memory holds one source frame and two greyscale frames.
   without re-encoding: `ffmpeg -ss 01:02:03 -i in.mp4 -t 60 -c copy out.mp4`.
 * **Image stabilisation experiments** from Module A are not implemented.
 * Default chunk lengths (15/30/45 frames, overlap 5) are placeholders until
-  MonST3R's memory use on a free Kaggle GPU is measured in Phase 3.
+  MonST3R's memory use on a free GPU is measured in the first real run.
+* **The cloud worker is unproven on a GPU.** See `cloud/README.md` for what
+  was and was not verified, and for the deviations from MonST3R's defaults
+  (most importantly, the flow loss is off to fit 16 GB).
+* **The car mask is not applied inside MonST3R**, which has no input for
+  ignoring pixels.
 
 ## Next steps
 
-1. Run the commands above on the laptop and on a real 20-30 s Interlagos clip;
-   inspect cuts and the plot, and tune `sample_fps` and score weights.
-2. Phase 3: inspect the official MonST3R repository (install, checkpoints,
-   licence, output format), build the Kaggle notebook around its real API,
-   define the artifact format, and add `scripts/validate_artifacts.py`.
+1. Export the package, run the Kaggle notebook on one chunk, and report the
+   runtime, peak GPU memory and any error.
+2. Reconstruct both manifests with identical settings, download and validate.
+3. Phase 4: cross-chunk Sim(3) alignment from the overlapping frames.

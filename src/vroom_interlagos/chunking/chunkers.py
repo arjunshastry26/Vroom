@@ -293,6 +293,7 @@ def build_chunk_manifest(
                     "frame_indices": [m.frame_index for m in members],
                     "frame_files": [m.filename for m in members],
                     "source_frame_range": [members[0].source_frame_index, members[-1].source_frame_index],
+                    "timestamps_s": [m.timestamp_s for m in members],
                     "start_timestamp_s": members[0].timestamp_s,
                     "end_timestamp_s": members[-1].timestamp_s,
                     "duration_s": members[-1].timestamp_s - members[0].timestamp_s,
