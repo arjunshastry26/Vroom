@@ -99,12 +99,19 @@ pass a new `--name`.
 3. In the right-hand panel: *Add Input* -> your dataset. *Session options*:
    Accelerator **GPU T4 x2** (or P100), Internet **On**, Persistence
    **Files only** if offered. Internet needs a phone-verified account.
-4. Run the cells in order. After the "Locate the package" cell prints the
-   manifest names, set `MANIFEST` in the settings cell and run on.
-5. The first run does one chunk (`MAX_CHUNKS = 1`). Look at the reported
-   runtime and peak GPU memory, then set `MAX_CHUNKS = None` and re-run the
-   reconstruct cell; the finished chunk is skipped.
-6. Run the download cell and fetch `reconstructions.zip` from the Output panel.
+4. *Run All*. Every manifest in the package is reconstructed with the same
+   settings, finished chunks are skipped, and the output is zipped at the end.
+   Nothing needs editing. For a quick test of a new package, set
+   `MAX_CHUNKS = 1` in the settings cell first.
+5. Download `reconstructions.zip` from the Output panel.
+
+To run unattended, use *Save Version* -> *Save & Run All (Commit)* instead of
+*Run All*. Kaggle then executes the notebook in the background with the GPU
+and you can close the browser. When it finishes, open the saved version and
+download the zip from its Output tab.
+
+Measured on a Tesla T4 (14.6 GB) with the default settings: 25 frames took
+204 s and 7.1 GB; 30 frames took 254 s and 8.3 GB.
 
 Free GPU hours and session lengths on Kaggle are limited and change over
 time; check your quota on the site. Nothing here assumes a particular quota.

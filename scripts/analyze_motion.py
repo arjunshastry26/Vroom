@@ -23,11 +23,14 @@ def main() -> int:
     parser = base_parser(__doc__.splitlines()[0])
     parser.add_argument("--frames", type=Path, required=True, help="Folder written by extract_frames.py")
     parser.add_argument("--config", type=Path, default=PROJECT_ROOT / "configs" / "chunking.yaml")
+    parser.add_argument("--mask", type=Path, default=None, help="Mask image; overrides motion.mask_path in the config")
     args = parser.parse_args()
     init_logging(args)
 
     try:
         cfg = dataclass_from_dict(MotionConfig, load_yaml(args.config).get("motion"))
+        if args.mask is not None:
+            cfg.mask_path = str(args.mask.resolve())
         if cfg.mask_path and not Path(cfg.mask_path).is_absolute():
             cfg.mask_path = str(PROJECT_ROOT / cfg.mask_path)  # relative paths are relative to the project
         if cfg.mask_path:

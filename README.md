@@ -83,6 +83,13 @@ Open a new PowerShell window afterwards so `ffprobe` is on PATH.
 
 ## Running the pipeline
 
+One command runs every local step for a clip and produces the zip to upload
+(steps whose output exists are skipped; the individual steps are listed below):
+
+```powershell
+python scripts\run_local_pipeline.py --video data\raw\interlagos_onboard.mp4 --video-id interlagos_lap2
+```
+
 Run the tests:
 
 ```powershell

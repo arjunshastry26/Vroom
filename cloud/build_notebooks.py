@@ -27,7 +27,10 @@ PLATFORMS = {
 1. *Accelerator*: **GPU T4 x2** or **GPU P100**.
 2. *Internet*: **On** (needs a phone-verified Kaggle account). It is used to clone MonST3R, install a few packages and download the model weights.
 3. *Persistence*: **Files only**, if the option is offered, so `/kaggle/working` survives a session restart.
-4. *Add Input* -> *Datasets* -> your uploaded package dataset (the zip made by `scripts\\export_chunks.py`).""",
+4. *Add Input* -> *Datasets* -> your uploaded package dataset (the zip made by `scripts\\export_chunks.py`).
+
+**Unattended run:** *Save Version* -> *Save & Run All (Commit)* runs the whole notebook in the background with the
+GPU. You can close the browser; when it finishes, open the saved version and download `reconstructions.zip` from its Output tab.""",
         "locate": '''import glob, json, os
 hits = sorted(glob.glob("/kaggle/input/**/package.json", recursive=True))
 assert hits, "No package.json under /kaggle/input. Add your package dataset with 'Add Input'."
@@ -89,8 +92,8 @@ code, one chunk at a time, and saves point maps, camera poses, intrinsics, depth
 
 MonST3R and its weights are licensed **CC BY-NC-SA 4.0** (non-commercial use only).
 
-Run the cells from top to bottom. The first run is limited to one chunk (`MAX_CHUNKS = 1`) so that you see
-quickly whether the GPU has enough memory."""),
+**Nothing needs editing.** Use *Run All*: every manifest in the package is reconstructed with the same settings,
+finished chunks are skipped, and the result is zipped at the end."""),
         md("## 1. Check the environment"),
         code('''
 import subprocess, sys, platform
@@ -109,8 +112,8 @@ print(subprocess.run(["nvidia-smi"], capture_output=True, text=True).stdout[:150
 '''),
         md("## 2. Settings"),
         code(f'''
-MANIFEST = None        # e.g. "adaptive_d70e3096"; None = list the manifests in the package and stop
-MAX_CHUNKS = 1         # first test: 1. Set to None to process every chunk of the manifest.
+MANIFESTS = "all"      # "all" = every manifest in the package, or a list such as ["adaptive_d70e3096"]
+MAX_CHUNKS = None      # None = every chunk. Set to 1 for a quick first test on a new package.
 CHUNKS = None          # or a list such as ["chunk_003", "chunk_004"]
 RESUME_FROM = None     # folder with artifacts of an earlier session (see the last section)
 OVERRIDES = {{}}         # reconstruction settings to change, e.g. {{"alignment": {{"batchify": False}}}}
@@ -129,8 +132,10 @@ print("Package :", PACKAGE)
 print("Video   :", info["video_id"], "|", info["n_frames"], "frames")
 for name, m in info["manifests"].items():
     print(f"Manifest: {name}  ({m['n_chunks']} chunks, longest {m['max_chunk_frames']} frames)")
-if MANIFEST is None:
-    print("\\nSet MANIFEST in the settings cell to one of the names above, then re-run from there.")
+RUN_MANIFESTS = list(info["manifests"]) if MANIFESTS == "all" else list(MANIFESTS)
+unknown = [m for m in RUN_MANIFESTS if m not in info["manifests"]]
+assert not unknown, f"Not in this package: {unknown}"
+print("Will reconstruct:", RUN_MANIFESTS)
 '''),
         md("""## 4. Get MonST3R
 
@@ -170,7 +175,6 @@ Each chunk is saved as soon as it finishes, and GPU memory is released before th
 fails (for example out of memory) is recorded with its error and the run continues with the next chunk."""),
         code('''
 import json, os, subprocess, sys
-assert MANIFEST is not None, "Set MANIFEST in the settings cell first."
 config_path = os.path.join(PACKAGE, "reconstruction.json")
 if OVERRIDES:
     def overlay(base, extra):
@@ -183,16 +187,19 @@ if OVERRIDES:
     config_path = os.path.join(WORK, "reconstruction_override.json")
     json.dump(overlay(json.load(open(os.path.join(PACKAGE, "reconstruction.json"))), OVERRIDES), open(config_path, "w"), indent=2)
 
-cmd = [sys.executable, os.path.join(PACKAGE, "monst3r_worker.py"), "--package", PACKAGE, "--manifest", MANIFEST,
-       "--output", OUTPUT, "--monst3r-root", MONST3R_ROOT, "--config", config_path]
-if MAX_CHUNKS: cmd += ["--max-chunks", str(MAX_CHUNKS)]
-if CHUNKS: cmd += ["--chunks", *CHUNKS]
-if RESUME_FROM: cmd += ["--resume-from", RESUME_FROM]
-print(" ".join(cmd))
-proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-for line in proc.stdout:
-    print(line, end="")
-print("worker exit code:", proc.wait(), "(0 = all requested chunks completed, 1 = some failed)")
+for manifest_name in RUN_MANIFESTS:   # every manifest gets the same settings
+    cmd = [sys.executable, os.path.join(PACKAGE, "monst3r_worker.py"), "--package", PACKAGE, "--manifest", manifest_name,
+           "--output", OUTPUT, "--monst3r-root", MONST3R_ROOT, "--config", config_path]
+    if MAX_CHUNKS: cmd += ["--max-chunks", str(MAX_CHUNKS)]
+    if CHUNKS: cmd += ["--chunks", *CHUNKS]
+    if RESUME_FROM: cmd += ["--resume-from", RESUME_FROM]
+    print("=" * 20, manifest_name, "=" * 20)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    for line in proc.stdout:
+        if "FutureWarning" in line or "autocast(" in line:
+            continue  # PyTorch deprecation noise from MonST3R
+        print(line, end="")
+    print("worker exit code:", proc.wait(), "(0 = all requested chunks completed, 1 = some failed)")
 '''),
         md("## 6. Results"),
         code('''
