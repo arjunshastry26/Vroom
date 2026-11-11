@@ -28,6 +28,10 @@ def main() -> int:
 
     try:
         cfg = dataclass_from_dict(MotionConfig, load_yaml(args.config).get("motion"))
+        if cfg.mask_path and not Path(cfg.mask_path).is_absolute():
+            cfg.mask_path = str(PROJECT_ROOT / cfg.mask_path)  # relative paths are relative to the project
+        if cfg.mask_path:
+            logger.info("Using mask: %s", cfg.mask_path)
         rows = analyze_motion(args.frames, cfg)
     except (FileNotFoundError, ValueError) as exc:
         logger.error("%s", exc)

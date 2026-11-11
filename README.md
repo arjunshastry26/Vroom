@@ -117,6 +117,16 @@ Generate both chunk manifests, the comparison report and the plot:
 python scripts\generate_chunks.py --frames data\frames\synthetic_test --strategy both
 ```
 
+Onboard footage needs a mask, because the car's own bodywork fills a large
+part of the frame and never moves. Estimate one from the frames (use a clip
+window in which the car is moving), check the preview, then set
+`motion.mask_path` in `configs\chunking.yaml` to the printed path and re-run
+`analyze_motion.py` and `generate_chunks.py`:
+
+```powershell
+python scripts\make_static_mask.py --frames data\frames\<video_id>
+```
+
 For real footage follow [data/README.md](data/README.md), then run the same
 last three commands with your `video_id`. Every script accepts `--help`,
 `--log-level` and `--log-file`.
@@ -140,12 +150,13 @@ replace an existing folder unless `--overwrite` is passed.
 ```
 configs/      preprocessing.yaml, chunking.yaml
 data/         README.md (dataset guide); footage and derived data are git-ignored
-scripts/      prepare_video, extract_frames, analyze_motion, generate_chunks, make_synthetic_clip
+scripts/      prepare_video, extract_frames, make_static_mask, analyze_motion, generate_chunks, make_synthetic_clip
 src/vroom_interlagos/
   preprocessing/   video.py (probe, PTS), frames.py (extraction), quality.py (cuts, duplicates, invalid)
   chunking/        motion.py, scoring.py, chunkers.py, plots.py
+  masking/         static_mask.py (static-region mask from temporal variation)
   synthetic.py     test-clip generator
-tests/        46 tests
+tests/        49 tests
 ```
 
 Deviations from the layout in the brief, and why:
@@ -249,8 +260,10 @@ analysis on CPU. Memory holds one source frame and two greyscale frames.
   variance, which is what the score uses, but flow magnitude alone must not be
   read as speed. Whether 3 fps is adequate for real onboard footage is an open
   question for the first real clip.
-* **Static cockpit parts** (halo, bodywork) bias flow towards zero. A fixed
-  mask image can be given via `motion.mask_path`; proper masking is Phase 7.
+* **Static cockpit parts** (halo, bodywork) bias flow towards zero.
+  `scripts/make_static_mask.py` estimates a mask from temporal variation. It
+  also masks uniform moving regions such as sky, and it does not handle other
+  cars or spray. Comparing masking strategies is Phase 7.
 * **Boundary scores are normalised per clip** and are not comparable between
   clips.
 * **Scene-cut detection** handles hard cuts between visually different shots

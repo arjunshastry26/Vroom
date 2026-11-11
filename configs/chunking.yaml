@@ -2,7 +2,7 @@
 
 motion:
   drop_duplicates: true    # duplicate frames are excluded from analysis and chunks
-  mask_path: null          # optional image; non-zero pixels are analysed (e.g. to exclude the car body)
+  mask_path: null          # e.g. data/masks/<video_id>/static_mask.png (scripts/make_static_mask.py); non-zero = analyse
   num_threads: 0
   seed: 0                  # OpenCV RNG seed (RANSAC)
   dense_flow:              # Farneback
