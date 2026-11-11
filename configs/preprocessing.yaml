@@ -19,6 +19,14 @@ clip:
   start_s: 0.0
   duration_s: null
 
+# Part of the source frame to keep (fractions of width/height), applied before
+# resizing. Full frame by default; see preprocessing_topcrop.yaml.
+crop_region:
+  x0: 0.0
+  y0: 0.0
+  x1: 1.0
+  y1: 1.0
+
 # Hard-cut detection at the source frame rate (colour-histogram distance).
 scene_cut:
   enabled: true

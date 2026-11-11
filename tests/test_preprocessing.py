@@ -8,7 +8,7 @@ import pytest
 
 from vroom_interlagos.common import dataclass_from_dict, load_yaml, read_json
 from vroom_interlagos.preprocessing.frames import (
-    ClipConfig, PreprocessConfig, _resize, extract_frames, load_frame_table,
+    ClipConfig, CropRegion, PreprocessConfig, _resize, extract_frames, load_frame_table,
 )
 from vroom_interlagos.preprocessing.video import ffprobe_available, probe_video
 
@@ -133,3 +133,22 @@ def test_config_validation_and_yaml() -> None:
         dataclass_from_dict(PreprocessConfig, {"target_widht": 512})
     with pytest.raises(ValueError):
         PreprocessConfig(sample_fps=-1).validate()
+
+
+def test_crop_region_keeps_only_the_requested_part() -> None:
+    frame = np.zeros((200, 400, 3), dtype=np.uint8)
+    frame[:100] = 200  # bright top half ("scene"), dark bottom half ("car")
+    cfg = PreprocessConfig(target_width=64, target_height=16, crop_region=CropRegion(0.0, 0.0, 1.0, 0.5))
+    out = _resize(frame, cfg)
+    assert out.shape == (16, 64, 3) and out.min() == 200
+    with pytest.raises(ValueError, match="crop_region"):
+        PreprocessConfig(crop_region=CropRegion(0.5, 0.0, 0.4, 1.0)).validate()
+
+
+def test_topcrop_config_is_valid_for_monst3r() -> None:
+    cfg = dataclass_from_dict(PreprocessConfig, load_yaml(CONFIGS / "preprocessing_topcrop.yaml"))
+    cfg.validate()
+    assert cfg.target_width % 16 == 0 and cfg.target_height % 16 == 0
+    assert cfg.crop_region.y1 < 0.6 and cfg.resize_mode == "center_crop"
+    out = _resize(np.zeros((710, 1238, 3), dtype=np.uint8), cfg)
+    assert out.shape == (144, 512, 3)

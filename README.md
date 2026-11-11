@@ -305,8 +305,14 @@ analysis on CPU. Memory holds one source frame and two greyscale frames.
 * **The cloud worker is unproven on a GPU.** See `cloud/README.md` for what
   was and was not verified, and for the deviations from MonST3R's defaults
   (most importantly, the flow loss is off to fit 16 GB).
-* **The car mask is not applied inside MonST3R**, which has no input for
-  ignoring pixels.
+* **First real reconstructions are not usable.** On the full-frame 3 fps
+  footage every chunk completed and validated, but the estimated camera hardly
+  moves or turns (median step about 0.001-0.006 of scene depth, about 0.02
+  degrees per frame), for both chunking strategies. Suspected causes: the
+  car's bodywork, fixed in half of every frame, and too much motion between
+  frames at 3 fps. MonST3R has no input for ignoring pixels, so
+  `configs/preprocessing_topcrop.yaml` crops the bodywork away instead; a
+  diagnostic comparing crop and frame rate is in progress.
 
 ## Next steps
 

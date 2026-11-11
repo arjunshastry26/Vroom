@@ -26,6 +26,7 @@ def main() -> int:
     parser.add_argument("--config", type=Path, default=PROJECT_ROOT / "configs" / "preprocessing.yaml")
     parser.add_argument("--out", type=Path, default=None, help="Output folder (default: data/frames/<video_id>)")
     parser.add_argument("--overwrite", action="store_true", help="Replace an existing extraction")
+    parser.add_argument("--sample-fps", type=float, default=None, help="Override sample_fps from the config")
     args = parser.parse_args()
     init_logging(args)
 
@@ -33,6 +34,8 @@ def main() -> int:
         cfg = dataclass_from_dict(PreprocessConfig, load_yaml(args.config))
         if args.overwrite:
             cfg.overwrite = True
+        if args.sample_fps is not None:
+            cfg.sample_fps = args.sample_fps
         if args.manifest:
             manifest = read_json(args.manifest)
             video_path = Path(manifest["video_path"])

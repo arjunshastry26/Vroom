@@ -55,6 +55,24 @@ class ClipConfig:
 
 
 @dataclass
+class CropRegion:
+    """Region of the source frame to keep, as fractions of its width and height.
+
+    Applied before resizing. Used to cut away image areas that are fixed to the
+    camera (car bodywork, recording borders), because the reconstruction model
+    has no way to ignore pixels.
+    """
+
+    x0: float = 0.0
+    y0: float = 0.0
+    x1: float = 1.0
+    y1: float = 1.0
+
+    def is_full(self) -> bool:
+        return (self.x0, self.y0, self.x1, self.y1) == (0.0, 0.0, 1.0, 1.0)
+
+
+@dataclass
 class PreprocessConfig:
     target_width: int = 512
     target_height: int = 288
@@ -68,6 +86,7 @@ class PreprocessConfig:
     num_threads: int = 0  # OpenCV threads; 0 = library default
     overwrite: bool = False
     clip: ClipConfig = field(default_factory=ClipConfig)
+    crop_region: CropRegion = field(default_factory=CropRegion)
     scene_cut: SceneCutConfig = field(default_factory=SceneCutConfig)
     duplicate: DuplicateConfig = field(default_factory=DuplicateConfig)
     invalid: InvalidFrameConfig = field(default_factory=InvalidFrameConfig)
@@ -85,6 +104,9 @@ class PreprocessConfig:
             raise ValueError("sample_fps must be positive or null")
         if self.timestamp_source not in {"auto", "ffprobe", "index"}:
             raise ValueError(f"Unknown timestamp_source: {self.timestamp_source}")
+        c = self.crop_region
+        if not (0.0 <= c.x0 < c.x1 <= 1.0 and 0.0 <= c.y0 < c.y1 <= 1.0):
+            raise ValueError("crop_region must satisfy 0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1")
         if self.clip.start_s < 0 or (self.clip.duration_s is not None and self.clip.duration_s <= 0):
             raise ValueError("clip.start_s must be >= 0 and clip.duration_s positive or null")
 
@@ -106,6 +128,10 @@ class FrameRecord:
 
 def _resize(frame: np.ndarray, cfg: PreprocessConfig) -> np.ndarray:
     target_w, target_h = cfg.target_width, cfg.target_height
+    if not cfg.crop_region.is_full():
+        h, w = frame.shape[:2]
+        c = cfg.crop_region
+        frame = frame[int(round(c.y0 * h)) : int(round(c.y1 * h)), int(round(c.x0 * w)) : int(round(c.x1 * w))]
     if cfg.resize_mode == "center_crop":
         h, w = frame.shape[:2]
         target_aspect = target_w / target_h

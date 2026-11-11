@@ -33,8 +33,7 @@ PLATFORMS = {
 GPU. You can close the browser; when it finishes, open the saved version and download `reconstructions.zip` from its Output tab.""",
         "locate": '''import glob, json, os
 hits = sorted(glob.glob("/kaggle/input/**/package.json", recursive=True))
-assert hits, "No package.json under /kaggle/input. Add your package dataset with 'Add Input'."
-PACKAGE = os.path.dirname(hits[0])''',
+assert hits, "No package.json under /kaggle/input. Add your package dataset with 'Add Input'."''',
         "download": '''# The zip appears in the Output panel on the right (refresh it), under /kaggle/working. Download it from there.
 # If the session is about to end, use "Save Version" -> "Quick Save" to keep /kaggle/working as notebook output.''',
         "resume": """**If the session disconnects:** start it again and re-run all cells. Chunks whose `metadata.json`
@@ -59,8 +58,7 @@ if not hits:
         with zipfile.ZipFile(name) as zf:
             zf.extractall("/content/package")
     hits = sorted(glob.glob("/content/**/package.json", recursive=True))
-assert hits, "No package.json found after upload."
-PACKAGE = os.path.dirname(hits[0])''',
+assert hits, "No package.json found after upload."''',
         "download": '''from google.colab import files
 files.download(archive)''',
         "resume": """**If the session disconnects:** Colab deletes `/content`. Keep the zip you downloaded. To continue,
@@ -92,7 +90,7 @@ code, one chunk at a time, and saves point maps, camera poses, intrinsics, depth
 
 MonST3R and its weights are licensed **CC BY-NC-SA 4.0** (non-commercial use only).
 
-**Nothing needs editing.** Use *Run All*: every manifest in the package is reconstructed with the same settings,
+**Nothing needs editing.** Use *Run All*: every manifest of every attached package is reconstructed with the same settings,
 finished chunks are skipped, and the result is zipped at the end."""),
         md("## 1. Check the environment"),
         code('''
@@ -127,15 +125,18 @@ OUTPUT = WORK + "/reconstructions"
 '''),
         md("## 3. Locate the package"),
         code(p["locate"] + '''
-info = json.load(open(os.path.join(PACKAGE, "package.json")))
-print("Package :", PACKAGE)
-print("Video   :", info["video_id"], "|", info["n_frames"], "frames")
-for name, m in info["manifests"].items():
-    print(f"Manifest: {name}  ({m['n_chunks']} chunks, longest {m['max_chunk_frames']} frames)")
-RUN_MANIFESTS = list(info["manifests"]) if MANIFESTS == "all" else list(MANIFESTS)
-unknown = [m for m in RUN_MANIFESTS if m not in info["manifests"]]
-assert not unknown, f"Not in this package: {unknown}"
-print("Will reconstruct:", RUN_MANIFESTS)
+JOBS = []   # (package folder, manifest name); every attached package is processed
+for hit in hits:
+    package = os.path.dirname(hit)
+    info = json.load(open(hit))
+    print("Package :", package)
+    print("Video   :", info["video_id"], "|", info["n_frames"], "frames")
+    for name, m in info["manifests"].items():
+        print(f"  manifest {name}  ({m['n_chunks']} chunks, longest {m['max_chunk_frames']} frames)")
+    wanted = list(info["manifests"]) if MANIFESTS == "all" else [m for m in MANIFESTS if m in info["manifests"]]
+    JOBS += [(package, name) for name in wanted]
+assert JOBS, "Nothing to reconstruct: check MANIFESTS in the settings cell."
+print("Will reconstruct", len(JOBS), "manifest(s).")
 '''),
         md("""## 4. Get MonST3R
 
@@ -175,25 +176,25 @@ Each chunk is saved as soon as it finishes, and GPU memory is released before th
 fails (for example out of memory) is recorded with its error and the run continues with the next chunk."""),
         code('''
 import json, os, subprocess, sys
-config_path = os.path.join(PACKAGE, "reconstruction.json")
-if OVERRIDES:
-    def overlay(base, extra):
-        for key, value in extra.items():
-            if isinstance(value, dict):
-                overlay(base.setdefault(key, {}), value)
-            else:
-                base[key] = value
-        return base
-    config_path = os.path.join(WORK, "reconstruction_override.json")
-    json.dump(overlay(json.load(open(os.path.join(PACKAGE, "reconstruction.json"))), OVERRIDES), open(config_path, "w"), indent=2)
+def overlay(base, extra):
+    for key, value in extra.items():
+        if isinstance(value, dict):
+            overlay(base.setdefault(key, {}), value)
+        else:
+            base[key] = value
+    return base
 
-for manifest_name in RUN_MANIFESTS:   # every manifest gets the same settings
+for PACKAGE, manifest_name in JOBS:
+    config_path = os.path.join(PACKAGE, "reconstruction.json")
+    if OVERRIDES:   # the same overrides are applied to every manifest
+        config_path = os.path.join(WORK, "reconstruction_override.json")
+        json.dump(overlay(json.load(open(os.path.join(PACKAGE, "reconstruction.json"))), OVERRIDES), open(config_path, "w"), indent=2)
     cmd = [sys.executable, os.path.join(PACKAGE, "monst3r_worker.py"), "--package", PACKAGE, "--manifest", manifest_name,
            "--output", OUTPUT, "--monst3r-root", MONST3R_ROOT, "--config", config_path]
     if MAX_CHUNKS: cmd += ["--max-chunks", str(MAX_CHUNKS)]
     if CHUNKS: cmd += ["--chunks", *CHUNKS]
     if RESUME_FROM: cmd += ["--resume-from", RESUME_FROM]
-    print("=" * 20, manifest_name, "=" * 20)
+    print("=" * 20, os.path.basename(PACKAGE), "/", manifest_name, "=" * 20)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     for line in proc.stdout:
         if "FutureWarning" in line or "autocast(" in line:

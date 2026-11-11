@@ -41,6 +41,9 @@ def main() -> int:
     parser.add_argument("--mask", type=Path, default=None,
                         help="Reuse an existing mask image (same camera) instead of estimating one")
     parser.add_argument("--no-mask", action="store_true", help="Analyse motion without a mask")
+    parser.add_argument("--preprocess-config", type=Path, default=None, help="Alternative preprocessing YAML")
+    parser.add_argument("--sample-fps", type=float, default=None, help="Override sample_fps")
+    parser.add_argument("--strategy", choices=["fixed", "adaptive", "both"], default="both")
     args = parser.parse_args()
     init_logging(args)
 
@@ -53,7 +56,12 @@ def main() -> int:
     if args.duration is not None:
         prep += ["--duration", str(args.duration)]
     step("inspect video", "prepare_video.py", prep, skip_if=manifest)
-    step("extract frames", "extract_frames.py", ["--manifest", str(manifest)], skip_if=frames / "metadata.json")
+    extract = ["--manifest", str(manifest)]
+    if args.preprocess_config is not None:
+        extract += ["--config", str(args.preprocess_config)]
+    if args.sample_fps is not None:
+        extract += ["--sample-fps", str(args.sample_fps)]
+    step("extract frames", "extract_frames.py", extract, skip_if=frames / "metadata.json")
 
     motion_args = ["--frames", str(frames)]
     if not args.no_mask:
@@ -64,7 +72,7 @@ def main() -> int:
                  skip_if=mask)
         motion_args += ["--mask", str(mask)]
     step("analyse motion", "analyze_motion.py", motion_args, skip_if=frames / "motion.csv")
-    step("generate chunks", "generate_chunks.py", ["--frames", str(frames), "--strategy", "both"])
+    step("generate chunks", "generate_chunks.py", ["--frames", str(frames), "--strategy", args.strategy])
     package = PROJECT_ROOT / "outputs" / "cloud_packages" / f"{vid}_package"
     step("export package", "export_chunks.py", ["--video-id", vid], skip_if=package)
 
