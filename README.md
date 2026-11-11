@@ -1,4 +1,4 @@
-# VROOM-Interlagos
+# VROOM-IV2
 
 **Motion-aware adaptive chunking and global pose optimization for monocular 3D
 reconstruction of Formula 1 circuits.**
