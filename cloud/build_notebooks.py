@@ -205,6 +205,11 @@ for path in sorted(glob.glob(OUTPUT + "/*/*/run_summary.json")):
     print("  counts:", summary["counts"])
     for cid, s in summary["chunks"].items():
         print(f"  {cid}: {s['status']:10s} runtime={s.get('runtime_s')} s  peak GPU={s.get('peak_gpu_memory_gb')} GB  {s.get('error') or s.get('note') or ''}")
+# Per-chunk details straight from each chunk's metadata (independent of the last run).
+for path in sorted(glob.glob(OUTPUT + "/*/*/chunk_*/metadata.json")):
+    m = json.load(open(path))
+    print(f"{m['manifest_name']} {m['chunk_id']}: {m['status']}  frames={m['n_frames']}  pairs={m.get('n_pairs')}  "
+          f"runtime={m['runtime_s']} s  peak GPU={m['peak_gpu_memory_gb']} GB  final loss={m.get('final_loss')}")
 '''),
         md("""### If a chunk failed with `out_of_memory`
 

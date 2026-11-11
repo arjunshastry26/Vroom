@@ -308,6 +308,19 @@ def chunk_is_complete(chunk_dir: Path, chunk: dict[str, Any], cfg_hash: str) -> 
     return True
 
 
+def summary_entry(chunk_dir: Path, note: str | None = None) -> dict[str, Any]:
+    """Status line for the run summary, read from the chunk's own metadata so that skipped or
+    restored chunks keep the runtime and memory figures of the run that produced them."""
+    meta = read_json(chunk_dir / METADATA)
+    error = meta.get("error")
+    entry = {"status": meta["status"], "n_frames": meta.get("n_frames"), "runtime_s": meta.get("runtime_s"),
+             "peak_gpu_memory_gb": meta.get("peak_gpu_memory_gb"), "final_loss": meta.get("final_loss"),
+             "error": None if not error else error["type"]}
+    if note:
+        entry["note"] = note
+    return entry
+
+
 def update_summary(out_dir: Path, base: dict[str, Any], statuses: dict[str, dict[str, Any]]) -> None:
     counts: dict[str, int] = {}
     for entry in statuses.values():
@@ -382,7 +395,7 @@ def run(args: argparse.Namespace, model: Any = None) -> int:
         cid = chunk["chunk_id"]
         chunk_dir = out_dir / cid
         if chunk_is_complete(chunk_dir, chunk, cfg_hash):
-            statuses[cid] = {"status": "completed", "note": "already done, skipped"}
+            statuses[cid] = summary_entry(chunk_dir, "already done, skipped")
             print(f"[{cid}] already completed - skipped")
             update_summary(out_dir, base_info, statuses)
             continue
@@ -390,7 +403,7 @@ def run(args: argparse.Namespace, model: Any = None) -> int:
             if chunk_dir.exists():
                 shutil.rmtree(chunk_dir)
             shutil.copytree(resume_dir / cid, chunk_dir)
-            statuses[cid] = {"status": "completed", "note": "copied from --resume-from"}
+            statuses[cid] = summary_entry(chunk_dir, "copied from --resume-from")
             print(f"[{cid}] restored from {resume_dir}")
             update_summary(out_dir, base_info, statuses)
             continue
@@ -457,9 +470,7 @@ def run(args: argparse.Namespace, model: Any = None) -> int:
             round(torch.cuda.max_memory_allocated() / 2**30, 2) if device == "cuda" else None
         )
         write_json(chunk_dir / METADATA, meta)  # written last: its presence marks the chunk as finished
-        statuses[cid] = {"status": meta["status"], "runtime_s": meta["runtime_s"],
-                         "peak_gpu_memory_gb": meta["peak_gpu_memory_gb"],
-                         "error": None if meta["error"] is None else meta["error"]["type"]}
+        statuses[cid] = summary_entry(chunk_dir)
         if meta["status"] == "completed":
             print(f"[{cid}] done in {meta['runtime_s']} s, peak GPU memory {meta['peak_gpu_memory_gb']} GB")
         update_summary(out_dir, base_info, statuses)
