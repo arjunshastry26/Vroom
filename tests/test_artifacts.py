@@ -197,3 +197,28 @@ def test_worker_config_and_resume_logic(tmp_path: Path) -> None:
     (d / "depth.npy").write_bytes(b"truncated")
     assert not worker.chunk_is_complete(d, chunk, "testhash")  # partial file -> recompute
     json.loads((d / "metadata.json").read_text())
+
+
+def test_trajectory_inspection(tmp_path: Path) -> None:
+    from vroom_interlagos.reconstruction.inspect import plot_run, trajectory_stats
+
+    manifest = _manifest()
+    for chunk in manifest["chunks"]:
+        write_test_chunk(tmp_path / chunk["chunk_id"], chunk)
+    s = trajectory_stats(tmp_path / "chunk_001")
+    # The test path moves 0.1 in x and 0.5 in z per frame, at constant speed.
+    assert np.allclose(s["steps"], np.hypot(0.1, 0.5), atol=1e-5)
+    assert s["max_over_median"] == pytest.approx(1.0, abs=1e-3) and s["near_static_fraction"] == 0.0
+    assert np.allclose(s["heading_change_deg"], np.degrees(0.02), atol=1e-2)
+    assert 0.5 < s["forward_alignment_median"] <= 1.0
+
+    # A frozen stretch followed by one jump is reported as such.
+    d = tmp_path / "chunk_001"
+    poses = np.load(d / "camera_poses.npy")
+    poses[:10, :3, 3] = poses[0, :3, 3] + np.arange(10)[:, None] * 1e-4
+    _rewrite(d, "camera_poses", poses)
+    s = trajectory_stats(d)
+    assert s["largest_step_at"] == 9 and s["near_static_fraction"] > 0.4
+
+    stats = plot_run(tmp_path, manifest, tmp_path / "traj.png")
+    assert len(stats) == len(manifest["chunks"]) and (tmp_path / "traj.png").stat().st_size > 10_000
