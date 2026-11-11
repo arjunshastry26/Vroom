@@ -210,7 +210,7 @@ def test_trajectory_inspection(tmp_path: Path) -> None:
     assert np.allclose(s["steps"], np.hypot(0.1, 0.5), atol=1e-5)
     assert s["max_over_median"] == pytest.approx(1.0, abs=1e-3) and s["near_static_fraction"] == 0.0
     assert np.allclose(s["heading_change_deg"], np.degrees(0.02), atol=1e-2)
-    assert 0.5 < s["forward_alignment_median"] <= 1.0
+    assert 0.5 < s["forward_alignment_median"] <= 1.0 and 0.9 < s["confident_fraction"] <= 1.0
 
     # A frozen stretch followed by one jump is reported as such.
     d = tmp_path / "chunk_001"

@@ -48,6 +48,8 @@ def trajectory_stats(chunk_dir: Path) -> dict[str, Any]:
         "path_length_rel": float(steps.sum()) / depth_scale,
         "heading_change_deg": np.degrees(np.arccos(cosines)),
         "forward_alignment_median": float(np.median(along)),
+        # Share of pixels above MonST3R's demo confidence threshold (1.1), sampled sparsely.
+        "confident_fraction": float((np.asarray(rec.confidence[:, ::4, ::4]) > 1.1).mean()),
     }
 
 

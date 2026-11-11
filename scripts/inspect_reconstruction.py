@@ -37,13 +37,14 @@ def main() -> int:
         return 1
 
     logger.info("Steps are in units of each chunk's median scene depth.")
-    logger.info("%-10s %6s %11s %9s %11s %9s %12s %13s %12s", "chunk", "frames", "median step", "max step",
-                "max/median", "jump at", "near-static", "median turn", "fwd align")
+    logger.info("%-10s %6s %11s %9s %11s %9s %12s %13s %12s %10s", "chunk", "frames", "median step", "max step",
+                "max/median", "jump at", "near-static", "median turn", "fwd align", "confident")
     for s in stats:
-        logger.info("%-10s %6d %11.4f %9.4f %11.1f %9d %11.0f%% %10.2f deg %12.2f", s["chunk_id"], s["n_frames"],
+        logger.info("%-10s %6d %11.4f %9.4f %11.1f %9d %11.0f%% %10.2f deg %12.2f %9.0f%%", s["chunk_id"], s["n_frames"],
                     s["step_median_rel"], s["step_max_rel"], s["max_over_median"],
                     s["frame_indices"][s["largest_step_at"]], 100 * s["near_static_fraction"],
-                    float(np.median(s["heading_change_deg"])), s["forward_alignment_median"])
+                    float(np.median(s["heading_change_deg"])), s["forward_alignment_median"],
+                    100 * s["confident_fraction"])
     logger.info("Plot: %s", out)
     return 0
 
