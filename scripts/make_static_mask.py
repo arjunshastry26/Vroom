@@ -31,10 +31,13 @@ def main() -> int:
                         help="Grey-level temporal std below which a pixel is static; raise to mask more")
     parser.add_argument("--open-px", type=int, default=StaticMaskConfig.open_px)
     parser.add_argument("--close-px", type=int, default=StaticMaskConfig.close_px)
+    parser.add_argument("--fill-holes", type=float, default=StaticMaskConfig.fill_holes_max_fraction,
+                        help="Absorb non-static islands smaller than this fraction of the image; 0 disables")
     args = parser.parse_args()
     init_logging(args)
 
-    cfg = StaticMaskConfig(std_threshold=args.std_threshold, open_px=args.open_px, close_px=args.close_px)
+    cfg = StaticMaskConfig(std_threshold=args.std_threshold, open_px=args.open_px, close_px=args.close_px,
+                           fill_holes_max_fraction=args.fill_holes)
     out_dir = args.out_dir or PROJECT_ROOT / "data" / "masks" / args.frames.name
     try:
         frames = usable_frames(load_frame_table(args.frames))

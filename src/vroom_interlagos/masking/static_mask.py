@@ -12,7 +12,9 @@ Limitations, by construction:
   vary little and are masked out. They carry no trackable features, so this
   costs little for motion analysis, but the mask is not a segmentation of the
   car.
-* Body parts with strong reflections or vibration may be left unmasked.
+* Parts of the car that do move in the image (rotating tyres, the driver's
+  helmet) are only caught when they form small islands surrounded by static
+  pixels (``fill_holes_max_fraction``); otherwise they stay unmasked.
 * Frames in which the car is stationary make everything look static; use a
   clip window in which the car is moving.
 
@@ -34,6 +36,8 @@ class StaticMaskConfig:
     blur_sigma: float = 2.0  # spatial smoothing of each frame, suppresses compression noise
     open_px: int = 5  # remove isolated static specks smaller than this
     close_px: int = 15  # fill holes inside static regions (e.g. logos on the bodywork)
+    fill_holes_max_fraction: float = 0.03  # non-static islands smaller than this share of the image
+    # are absorbed into the static region (tyres, helmet and other moving parts of the car)
     min_frames: int = 10
 
 
@@ -67,4 +71,10 @@ def estimate_static_mask(gray_frames: Iterable[np.ndarray], cfg: StaticMaskConfi
     if cfg.close_px > 1:
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (cfg.close_px, cfg.close_px))
         static = cv2.morphologyEx(static, cv2.MORPH_CLOSE, kernel)
+    if cfg.fill_holes_max_fraction > 0:
+        n_labels, labels, stats, _ = cv2.connectedComponentsWithStats((1 - static).astype(np.uint8), connectivity=4)
+        max_area = cfg.fill_holes_max_fraction * static.size
+        for label in range(1, n_labels):
+            if stats[label, cv2.CC_STAT_AREA] < max_area:
+                static[labels == label] = 1
     return (1 - static) * 255, std

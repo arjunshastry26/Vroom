@@ -51,3 +51,17 @@ def test_mask_restores_flow_statistics() -> None:
     mostly_car = np.zeros(a.shape, np.uint8)
     mostly_car[84:144, 48:208] = 255
     assert dense_flow_stats(a, b, cfg, mostly_car)["flow_mag_median"] < 1.5
+
+
+def test_small_moving_islands_inside_static_region_are_filled() -> None:
+    """A 'tyre' that changes over time but is enclosed by the static block is absorbed."""
+    rng = np.random.default_rng(5)
+    frames = _frames_with_static_block()
+    for frame in frames:
+        frame[100:120, 100:125] = rng.integers(0, 256, (20, 25), dtype=np.uint8)
+    cfg = StaticMaskConfig(blur_sigma=0.0, close_px=1)
+    filled, _ = estimate_static_mask(frames, cfg)
+    assert (filled[102:118, 102:123] == 0).all()
+    assert (filled[:70] == 255).mean() > 0.9  # the large moving background is not an island
+    kept, _ = estimate_static_mask(frames, StaticMaskConfig(blur_sigma=0.0, close_px=1, fill_holes_max_fraction=0.0))
+    assert (kept[102:118, 102:123] == 255).mean() > 0.9
