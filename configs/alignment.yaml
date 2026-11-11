@@ -1,0 +1,21 @@
+# Module F - cross-chunk Sim(3) alignment (scripts/align_chunks.py).
+
+pixel_stride: 4            # use every n-th pixel of the shared frames
+min_confidence: 1.1        # MonST3R confidence threshold (its demo default); both chunks must exceed it
+max_points: 20000          # correspondences given to RANSAC
+mask_path: null            # optional image, non-zero = usable pixels (e.g. data/masks/<id>/static_mask.png)
+
+ransac:
+  iterations: 1000
+  inlier_threshold_rel: 0.05   # residual / distance of the point from its camera
+  seed: 0
+
+# An alignment is rejected (and the chain broken there) if any of these fails.
+accept:
+  min_correspondences: 500
+  min_inliers: 300
+  min_inlier_ratio: 0.3
+  max_scale_ratio: 50.0        # scale must lie in [1/x, x]
+  max_rmse_rel: 0.04           # RMS inlier residual relative to point distance
+  max_pose_rotation_deg: 10.0  # independent check: shared cameras must agree after alignment
+  max_pose_centre_rel: 0.5     # ... in position, relative to the camera travel inside the overlap

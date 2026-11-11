@@ -109,3 +109,78 @@ def make_motion_rows(records: list[FrameRecord], unstable: tuple[int, ...] = ())
             )
         rows.append(row)
     return rows
+
+
+# ----------------------------------------------------------------------------
+# Constructed 3-D scene with a known answer, written in the worker's artifact
+# format. Used to test alignment; it is test data, not a reconstruction.
+
+def write_chunk_arrays(chunk_dir: Path, chunk: dict, arrays: dict) -> None:
+    import numpy as np
+
+    from vroom_interlagos.common import sha256_file, write_json
+
+    chunk_dir.mkdir(parents=True, exist_ok=True)
+    files = {}
+    for name, arr in arrays.items():
+        np.save(chunk_dir / f"{name}.npy", arr)
+        files[f"{name}.npy"] = {"sha256": sha256_file(chunk_dir / f"{name}.npy"), "shape": list(arr.shape),
+                                "dtype": str(arr.dtype)}
+    write_json(chunk_dir / "metadata.json", {
+        "chunk_id": chunk["chunk_id"], "status": "completed", "frame_indices": chunk["frame_indices"],
+        "frame_files": chunk["frame_files"], "model": "constructed-scene", "reconstruction_config": {},
+        "reconstruction_config_hash": "testhash", "files": files, "gpu": {"available": False},
+        "runtime_s": 0.0, "peak_gpu_memory_gb": None, "final_loss": None, "error": None,
+    })
+
+
+def scene_frame(i: int, h: int = 36, w: int = 64):
+    """World pose, intrinsics and ray-cast depth of frame ``i`` in a corridor (ground + two walls + end cap)."""
+    import cv2
+    import numpy as np
+
+    K = np.array([[40.0, 0, w / 2], [0, 40.0, h / 2], [0, 0, 1]])
+    R, _ = cv2.Rodrigues(np.array([0.0, 0.25 * np.sin(i * 0.07), 0.0]))
+    centre = np.array([1.5 * np.sin(i * 0.05), 0.0, 1.0 * i])
+    pose = np.eye(4)
+    pose[:3, :3], pose[:3, 3] = R, centre
+    u, v = np.meshgrid(np.arange(w, dtype=float), np.arange(h, dtype=float))
+    rays = np.stack([(u - K[0, 2]) / K[0, 0], (v - K[1, 2]) / K[1, 1], np.ones_like(u)], -1) @ R.T
+    depth = np.full((h, w), np.inf)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        for axis, value in ((1, 1.5), (0, 5.0), (0, -5.0), (2, centre[2] + 40.0), (1, -6.0)):
+            t = (value - centre[axis]) / rays[..., axis]
+            depth = np.where((t > 1e-6) & (t < depth), t, depth)
+    return pose, K, depth
+
+
+def write_scene_run(run_dir: Path, manifest: dict, depth_noise: float = 0.0, seed: int = 0) -> dict:
+    """Write every chunk of ``manifest`` in its own random similarity frame. Returns ``{chunk_id: Sim3}``
+    (world -> chunk), the ground truth for alignment tests."""
+    import cv2
+    import numpy as np
+
+    from vroom_interlagos.alignment.sim3 import Sim3
+    from vroom_interlagos.reconstruction.artifacts import unproject_depth
+
+    rng = np.random.default_rng(seed)
+    truth = {}
+    for chunk in manifest["chunks"]:
+        R, _ = cv2.Rodrigues(rng.normal(0, 0.8, 3))
+        Q = Sim3(float(rng.uniform(0.3, 3.0)), R, rng.normal(0, 20, 3))
+        truth[chunk["chunk_id"]] = Q
+        poses, Ks, depths, points = [], [], [], []
+        for frame in chunk["frame_indices"]:
+            pose, K, depth = scene_frame(frame)
+            depth = depth * (1.0 + depth_noise * rng.normal(size=depth.shape))
+            pose_c = Q.transform_pose(pose)
+            depth_c = Q.s * depth
+            poses.append(pose_c), Ks.append(K), depths.append(depth_c)
+            points.append(unproject_depth(depth_c, K, pose_c))
+        n = len(poses)
+        write_chunk_arrays(run_dir / chunk["chunk_id"], chunk, {
+            "camera_poses": np.asarray(poses, np.float32), "intrinsics": np.asarray(Ks, np.float32),
+            "depth": np.asarray(depths, np.float32), "pointmaps": np.asarray(points, np.float32),
+            "confidence": np.full((n, 36, 64), 3.0, np.float32),
+        })
+    return truth

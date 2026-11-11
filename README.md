@@ -22,7 +22,7 @@ Hypothesis under test (not yet tested, no claim is made):
 | 1 | Preprocessing: probe, frame extraction, quality checks, motion analysis, manifests | done |
 | 2 | Fixed and motion-aware adaptive chunking, plots | first version done |
 | 3 | MonST3R worker, Kaggle / Colab notebooks, package export, artifact validation | written; not yet run on a GPU |
-| 4 | Cross-chunk Sim(3) alignment | not started |
+| 4 | Cross-chunk Sim(3) alignment, sequential stitching | written; tested on constructed scenes only |
 | 5 | Global pose-graph optimization, loop closure | not started |
 | 6 | Evaluation and ablations | not started |
 | 7 | Masking, multi-lap fusion, scale recovery | not started |
@@ -154,6 +154,12 @@ Validate the artifacts after downloading and unzipping them into
 python scripts\validate_artifacts.py --run outputs\reconstructions\<video_id>\<manifest>__recon_<hash>
 ```
 
+Align the chunks of a run pairwise and stitch them sequentially:
+
+```powershell
+python scripts\align_chunks.py --run outputs\reconstructions\<video_id>\<manifest>__recon_<hash>
+```
+
 Outputs:
 
 | Path | Content |
@@ -165,6 +171,7 @@ Outputs:
 | `outputs/plots/<id>/chunking_*.png` | boundaries against motion statistics |
 | `outputs/cloud_packages/<id>_package(.zip)` | frames, manifests, settings and worker for upload |
 | `outputs/reconstructions/<id>/<manifest>__recon_<hash>/chunk_XXX/` | MonST3R artifacts per chunk |
+| `outputs/alignments/<id>/<run>/` | `alignment.json` (edges, chunk transforms, checks), stitched trajectory (CSV, NPZ, plot), point cloud (PLY) |
 
 Manifest folders are named by a hash of the configuration, so a new
 configuration never overwrites an earlier result. Frame extraction refuses to
@@ -173,18 +180,20 @@ replace an existing folder unless `--overwrite` is passed.
 ## Repository layout
 
 ```
-configs/      preprocessing.yaml, chunking.yaml, reconstruction.yaml
+configs/      preprocessing.yaml, preprocessing_topcrop.yaml, chunking.yaml, reconstruction.yaml, alignment.yaml
 cloud/        monst3r_worker.py, Kaggle and Colab notebooks, README.md
 data/         README.md (dataset guide); footage and derived data are git-ignored
 scripts/      prepare_video, extract_frames, make_static_mask, analyze_motion, generate_chunks,
-              export_chunks, validate_artifacts, make_synthetic_clip
+              export_chunks, validate_artifacts, inspect_reconstruction, align_chunks,
+              run_local_pipeline, make_synthetic_clip
 src/vroom_interlagos/
   preprocessing/   video.py (probe, PTS), frames.py (extraction), quality.py (cuts, duplicates, invalid)
   chunking/        motion.py, scoring.py, chunkers.py, plots.py
   masking/         static_mask.py (static-region mask from temporal variation)
-  reconstruction/  package.py (upload package), artifacts.py (loading and validation)
+  reconstruction/  package.py (upload package), artifacts.py (loading and validation), inspect.py
+  alignment/       sim3.py, pairwise.py (overlap correspondences, RANSAC Sim(3)), stitch.py
   synthetic.py     test-clip generator
-tests/        57 tests (2 need PyTorch and a MonST3R checkout, otherwise skipped)
+tests/        71 tests (2 need PyTorch and a MonST3R checkout, otherwise skipped)
 ```
 
 Deviations from the layout in the brief, and why:
@@ -261,6 +270,33 @@ indices and files, source frame range, timestamps, overlap with both
 neighbours, motion statistics, boundary score and flags; plus the full
 configuration, its hash, segments, excluded frames and a summary.
 
+### Cross-chunk alignment
+
+Adjacent chunks were reconstructed from some of the same images. In such a
+frame, a pixel is the same scene point in both chunks, so the two point maps
+give dense 3-D to 3-D correspondences directly; no feature matching is needed
+for overlaps (it will be needed for loop closure, where the frames differ).
+Correspondences are filtered by confidence in both chunks, optionally by a
+mask of camera-fixed pixels, and subsampled. A Sim(3) is estimated with RANSAC
+over 3-point Umeyama fits and refined on the inliers; residuals are measured
+relative to each point's distance from its camera. Scale is estimated because
+every chunk has its own.
+
+Conventions: `S_ab` maps chunk `b` coordinates into chunk `a`
+(`X_a = s R X_b + t`). A chunk transform maps chunk coordinates into the frame
+of the first chunk of its component.
+
+The camera poses of the shared frames are not used in the estimate. They are
+the independent check: after alignment both chunks must place the shared
+cameras at the same position and orientation. An edge is rejected, with the
+reason recorded, on too few inliers, a low inlier ratio, an implausible scale,
+a high residual, or disagreeing shared cameras.
+
+Sequential stitching chains the accepted edges. A rejected or missing edge
+breaks the chain and the following chunks form a new component with its own
+frame; nothing is bridged by guessing. This is the baseline that global
+pose-graph optimisation will be compared against.
+
 ## Resource use
 
 Measured in a Linux container, not on the target laptop: the 40 s synthetic
@@ -316,7 +352,8 @@ analysis on CPU. Memory holds one source frame and two greyscale frames.
 
 ## Next steps
 
-1. Export the package, run the Kaggle notebook on one chunk, and report the
-   runtime, peak GPU memory and any error.
-2. Reconstruct both manifests with identical settings, download and validate.
-3. Phase 4: cross-chunk Sim(3) alignment from the overlapping frames.
+1. Find input settings that give sound per-chunk reconstructions (crop and
+   frame-rate diagnostic), then reconstruct both manifests again.
+2. Run `align_chunks.py` on those runs and inspect edges and trajectory.
+3. Phase 5: Sim(3) pose graph over the edges, loop closure, comparison with
+   sequential stitching.
